@@ -408,8 +408,15 @@ reg [24:0] tape_motor_cnt;
 wire       tape_motor_led = tape_motor_cnt[24] ? tape_motor_cnt[23:16] > tape_motor_cnt[7:0] : tape_motor_cnt[23:16] <= tape_motor_cnt[7:0];
 always @(posedge clk_sys) tape_motor_cnt <= tape_motor_cnt + 1'd1;
 
-tzxplayer tzxplayer
-(
+tzxplayer #(
+	.NORMAL_PILOT_LEN(2000),
+	.NORMAL_SYNC1_LEN(855),
+	.NORMAL_SYNC2_LEN(855),
+	.NORMAL_ZERO_LEN(855),
+	.NORMAL_ONE_LEN(1710),
+	.NORMAL_PILOT_PULSES(4095)
+)
+tzxplayer (
     .clk(clk_sys),
     .ce(1),
     .restart_tape(tape_reset),
