@@ -370,6 +370,7 @@ end
 ////////////////////// CDT playback ///////////////////////////////
 
 wire        tape_read;
+wire        tape_running;
 wire        tape_data_req;
 reg         tape_data_ack;
 reg         tape_reset;
@@ -424,7 +425,27 @@ tzxplayer (
     .tzx_req(tape_data_req),
     .tzx_ack(tape_data_ack),
     .cass_read(tape_read),
-    .cass_motor(tape_motor)
+    .cass_motor(tape_motor),
+    .cass_running(tape_running)
+);
+
+wire progress_pix;
+reg [31:0] tape_progress;
+
+always @(posedge clk_sys)
+	if (tape_last_addr != 0)
+		tape_progress <= tape_play_addr * 7'd127 / tape_last_addr;
+	else
+		tape_progress <= 0;
+
+progressbar progressbar(
+	.clk(clk_sys),
+	.ce_pix(ce_16),
+	.HSync(HSync),
+	.VSync(VSync),
+	.enable(tape_running),
+	.progress(tape_progress[6:0]),
+	.pix(progress_pix)
 );
 
 //////////////////////////////////////////////////////////////////////////
@@ -770,9 +791,9 @@ mist_video #(.SD_HCNT_WIDTH(10), .OSD_X_OFFSET(10'd18)) mist_video (
 	.blend       ( 1'b0       ),
 
 	// video in
-	.R           ( blank ? 6'd0 : R[7:2] ),
-	.G           ( blank ? 6'd0 : G[7:2] ),
-	.B           ( blank ? 6'd0 : B[7:2] ),
+	.R           ( blank ? 6'd0 : ( R[7:2] | {6{progress_pix}}) ),
+	.G           ( blank ? 6'd0 : ( G[7:2] | {6{progress_pix}}) ),
+	.B           ( blank ? 6'd0 : ( B[7:2] | {6{progress_pix}}) ),
 
 	.HSync       ( ~HSync     ),
 	.VSync       ( ~VSync     ),
