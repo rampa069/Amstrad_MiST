@@ -58,8 +58,8 @@ assign LED = ~mf2_en & ~ioctl_download & ~(tape_running & tape_motor_led);
 `include "build_id.v"
 localparam CONF_STR = {
 	"AMSTRAD;;",
-	"S0,DSK,Mount Disk A:;",
-	"S1,DSK,Mount Disk B:;",
+	"S0U,DSK,Mount Disk A:;",
+	"S1U,DSK,Mount Disk B:;",
 	"F,E??,Load expansion;",
 	"F,CDT,Load;",
 	"P1,Video & Audio;",
