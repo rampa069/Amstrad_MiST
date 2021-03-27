@@ -53,7 +53,7 @@ module Amstrad
 
 //////////////////////////////////////////////////////////////////////////
 
-assign LED = ~mf2_en & ~ioctl_download & ~(tape_motor & tape_motor_led);
+assign LED = ~mf2_en & ~ioctl_download & ~(tape_running & tape_motor_led);
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -375,6 +375,9 @@ wire        tape_data_req;
 reg         tape_data_ack;
 reg         tape_reset;
 reg         tape_rd;
+reg         tape_play;
+wire        tape_motor;
+reg         tape_end;
 reg   [7:0] tape_dout;
 reg  [22:0] tape_play_addr;
 reg  [22:0] tape_last_addr;
@@ -387,6 +390,7 @@ always @(posedge clk_sys) begin
         tape_last_addr <= 0;
         tape_rd <= 0;
         tape_reset <= 1;
+        tape_end <= 0;
     end else begin
         old_tape_ack <= tape_ack;
         tape_reset <= 0;
@@ -394,13 +398,17 @@ always @(posedge clk_sys) begin
             tape_play_addr <= 0;
             tape_last_addr <= tape_addr;
             tape_reset <= 1;
+            tape_end <= 0;
         end
         if (!ioctl_download && tape_rd && tape_ack ^ old_tape_ack) begin
             tape_data_ack <= tape_data_req;
             tape_rd <= 0;
             tape_play_addr <= tape_play_addr + 1'd1;
-        end else if (!ioctl_download && tape_play_addr <= tape_last_addr && !tape_rd && (tape_data_req ^ tape_data_ack)) begin
-            tape_rd <= 1;
+        end else if (!ioctl_download && !tape_rd && (tape_data_req ^ tape_data_ack)) begin
+            if (tape_play_addr <= tape_last_addr)
+                tape_rd <= 1;
+            else
+                tape_end <= 1;
         end
     end
 end
@@ -425,7 +433,7 @@ tzxplayer (
     .tzx_req(tape_data_req),
     .tzx_ack(tape_data_ack),
     .cass_read(tape_read),
-    .cass_motor(tape_motor),
+    .cass_motor(tape_motor & !tape_end),
     .cass_running(tape_running)
 );
 
@@ -826,12 +834,7 @@ sigma_delta_dac #(10) dac_r
 
 //////////////////////////////////////////////////////////////////////
 
-localparam ear_autostop_time = 5 * 64000000; // 5 sec
-reg        ear_input_detected;
-integer    ear_autostop_cnt = 0;
 reg        UART_RXd, UART_RXd2, tape_in;
-reg        tape_play;
-wire       tape_motor;
 assign     UART_TX = tape_motor;
 
 // detect tape input from UART, switch to external tape input for 5 secs
@@ -841,9 +844,7 @@ always @(posedge clk_sys) begin
 	UART_RXd2 <= UART_RXd;
 	tape_in <= UART_RXd2;
 
-	if (ear_autostop_cnt != 0) ear_autostop_cnt <= ear_autostop_cnt - 1'd1;
-	if (tape_in ^ UART_RXd2) ear_autostop_cnt <= ear_autostop_time;
-	tape_play <= (ear_autostop_cnt != 0) ? tape_in : tape_read;
+	tape_play <= tape_running ? tape_read : tape_in;
 end
 
 endmodule
