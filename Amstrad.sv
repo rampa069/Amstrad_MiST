@@ -81,6 +81,7 @@ localparam CONF_STR = {
 	"P3OGH,FDC,Original,Fast,Disabled;",
 	"P3O5,Distributor,Amstrad,Schneider;",
 	"P3O4,Model,CPC 6128,CPC 664;",
+	"P3OP,Tape progressbar,Off,On;",
 	"P3T0,Reset & apply model;",
 	"V,",`BUILD_DATE
 };
@@ -101,6 +102,7 @@ wire       st_mouse_en = status[19];
 wire       st_right_shift_mod = status[22];
 wire       st_keypad_mod = status[23];
 wire       st_playcity_ena = status[24];
+wire       st_progressbar = status[25];
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -451,7 +453,7 @@ progressbar progressbar(
 	.ce_pix(ce_16),
 	.hblank(hbl),
 	.vblank(vbl),
-	.enable(tape_running),
+	.enable(tape_running & st_progressbar),
 	.progress(tape_progress[6:0]),
 	.pix(progress_pix)
 );
