@@ -1025,7 +1025,7 @@ always @(posedge clk_sys) begin : fdc
 
 			//process trackInfo + sectorInfo
 			COMMAND_RW_DATA_EXEC3:
-			if (i_secinfo_valid[ds0][hds]) begin
+			if (i_secinfo_valid[ds0][hds] && i_byte_clk_en) begin
 				i_sector <= i_current_sector_pos[ds0][hds];
 
 				if (i_sector != i_current_sector_pos[ds0][hds]) begin
@@ -1041,8 +1041,8 @@ always @(posedge clk_sys) begin : fdc
 				end
 
 				if ((i_current_sector_pos[ds0][hds] == i_current_track_sectors[ds0][hds] - 1) &&
-				    (sector_byte_pos[ds0][hds] == sector_length[ds0][hds]-1) &&
-					  (ds0 == i_current_drive) && i_byte_clk_en) begin
+				    (sector_byte_pos[ds0][hds] == (sector_end_pos[ds0][hds] + gap3[ds0][hds] - 1)) &&
+					(ds0 == i_current_drive)) begin
 					$display("passed index mark, pass: %d", i_scanning);
 					// passed index mark
 					if (i_scanning) begin
