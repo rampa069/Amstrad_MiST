@@ -22,10 +22,12 @@
 module Amstrad
 (
 	input         SPI_DI,
+	inout         SPI_DO,
 	input         SPI_SCK,
 	input         CONF_DATA0,
 	input         SPI_SS2,
 	input         SPI_SS3,
+	input         SPI_SS4,
 	input   [1:0] CLOCK_27,
 	output        AUDIO_L,
 	output        AUDIO_R,
@@ -40,7 +42,6 @@ module Amstrad
 	output        SDRAM_nCAS,
 	output        SDRAM_CLK,
 	output        LED,
-	output        SPI_DO,
 	output        VGA_HS,
 	output        VGA_VS,
 	output [12:0] SDRAM_A,
@@ -58,13 +59,14 @@ assign LED = ~mf2_en & ~ioctl_download & ~(tape_running & tape_motor_led);
 `include "build_id.v"
 localparam CONF_STR = {
 	"AMSTRAD;;",
-	"S0U,DSK,Mount Disk A:;",
-	"S1U,DSK,Mount Disk B:;",
+	"S2U,DSK,Mount Disk A:;",
+	"S3U,DSK,Mount Disk B:;",
 	"F,E??,Load expansion;",
 	"F,CDT,Load;",
 	"P1,Video & Audio;",
 	"P2,Controls;",
 	"P3,System;",
+	"T0,Reset & apply model;",
 	"P1O9A,Scandoubler Fx,None,CRT 25%,CRT 50%,CRT 75%;",
 	"P1OBD,Display,Color(GA),Color(ASIC),Green,Amber,Cyan,White;",
 	"P1O2,CRTC,Type 1,Type 0;",
@@ -78,11 +80,11 @@ localparam CONF_STR = {
 	"P2ON,Keypad,Numbers,Symbols;",
 	"P3OEF,Multiface 2,Enabled,Hidden,Disabled;",
 	"P3O6,CPU timings,Original,Fast;",
+	"P3OQ,Symbiface II,Off,On;",
 	"P3OGH,FDC,Original,Fast,Disabled;",
 	"P3O5,Distributor,Amstrad,Schneider;",
 	"P3O4,Model,CPC 6128,CPC 664;",
 	"P3OP,Tape progressbar,Off,On;",
-	"P3T0,Reset & apply model;",
 	"V,",`BUILD_DATE
 };
 
@@ -103,6 +105,7 @@ wire       st_right_shift_mod = status[22];
 wire       st_keypad_mod = status[23];
 wire       st_playcity_ena = status[24];
 wire       st_progressbar = status[25];
+wire       st_symbiface = status[26];
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -175,7 +178,26 @@ wire        scandoubler_disable;
 wire        ypbpr;
 wire        no_csync;
 
-user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
+wire [63:0] rtc;
+
+wire        hdd_cmd_req;
+wire        hdd_dat_req;
+wire        hdd_status_wr;
+
+wire  [2:0] hdd_addr;
+wire        hdd_wr;
+
+wire [15:0] hdd_data_out;
+wire [15:0] hdd_data_in;
+wire        hdd_data_rd;
+wire        hdd_data_wr;
+
+wire        ide_cs;
+wire  [2:0] ide_addr;
+wire [15:0] ide_din;
+wire [15:0] ide_dout;
+
+user_io #(.STRLEN($size(CONF_STR)>>3), .SD_IMAGES(4), .FEATURES(32'h50) /* Primary IDE - master/slave ATA */) user_io
 (
 	.clk_sys(clk_sys),
 	.clk_sd(clk_sys),
@@ -186,13 +208,13 @@ user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
 	.SPI_MOSI(SPI_DI),
 	.SPI_MISO(SPI_DO),
 
-	.img_mounted(img_mounted),
+	.img_mounted({img_mounted, 2'b00}), // 0-1 is reserved for IDE
 	.img_size(img_size),
 	.sd_conf(0),
 	.sd_sdhc(1),
 	.sd_lba(sd_lba),
-	.sd_rd(sd_rd),
-	.sd_wr(sd_wr),
+	.sd_rd({sd_rd, 2'b00}),
+	.sd_wr({sd_wr, 2'b00}),
 	.sd_ack(sd_ack),
 	.sd_buff_addr(sd_buff_addr),
 	.sd_din(sd_buff_din),
@@ -216,16 +238,20 @@ user_io #(.STRLEN($size(CONF_STR)>>3)) user_io
 	.status(status),
 	.scandoubler_disable(scandoubler_disable),
 	.ypbpr(ypbpr),
-	.no_csync(no_csync)
+	.no_csync(no_csync),
+
+	.rtc(rtc)
 );
 
-data_io data_io
+data_io #(.ENABLE_IDE(1'b1)) data_io
 (
 	.clk_sys(clk_sys),
 
 	.SPI_SCK(SPI_SCK),
 	.SPI_SS2(SPI_SS2),
+	.SPI_SS4(SPI_SS4),
 	.SPI_DI(SPI_DI),
+	.SPI_DO(SPI_DO),
 
 	.clkref_n(~ce_boot),
 	.ioctl_wr(ioctl_wr),
@@ -233,7 +259,52 @@ data_io data_io
 	.ioctl_dout(ioctl_dout),
 	.ioctl_download(ioctl_download),
 	.ioctl_index(ioctl_index),
-	.ioctl_fileext(ioctl_file_ext)
+	.ioctl_fileext(ioctl_file_ext),
+
+	.hdd_clk       ( clk_sys      ),
+	.hdd_cmd_req   ( hdd_cmd_req  ),
+	.hdd_dat_req   ( hdd_dat_req  ),
+	.hdd_status_wr ( hdd_status_wr),
+	.hdd_addr      ( hdd_addr     ),
+	.hdd_wr        ( hdd_wr       ),
+	.hdd_data_out  ( hdd_data_out ),
+	.hdd_data_in   ( hdd_data_in  ),
+	.hdd_data_rd   ( hdd_data_rd  ),
+	.hdd_data_wr   ( hdd_data_wr  )
+);
+
+ide ide (
+	.clk(clk_sys), // system clock
+	.clk_en(1'b1),
+	.reset(reset),
+
+	// cpu interface
+	.address_in(ide_addr),
+	.sel_secondary(1'b0),
+	.data_in(ide_din),
+	.data_out(ide_dout),
+	.rd(io_rd),
+	.hwr(io_wr),
+	.lwr(io_wr),
+	.sel_ide(ide_cs),
+	.intreq(),
+	.intreq_ack(),
+	.nrdy(),              // fifo is not ready for reading
+	.hdd0_ena(2'b11),     // enables Master & Slave drives on primary channel
+	.hdd1_ena(2'b00),     // enables Master & Slave drives on secondary channel
+	.fifo_rd(),
+	.fifo_wr(),
+
+	// io controller interface
+	.hdd_cmd_req   ( hdd_cmd_req  ),
+	.hdd_dat_req   ( hdd_dat_req  ),
+	.hdd_status_wr ( hdd_status_wr),
+	.hdd_addr      ( hdd_addr     ),
+	.hdd_wr        ( hdd_wr       ),
+	.hdd_data_in   ( hdd_data_in  ),
+	.hdd_data_out  ( hdd_data_out ),
+	.hdd_data_rd   ( hdd_data_rd  ),
+	.hdd_data_wr   ( hdd_data_wr  )
 );
 
 wire        rom_download  = ioctl_download && (ioctl_index == 8'd0);
@@ -619,6 +690,25 @@ playcity playcity
 );
 
 //////////////////////////////////////////////////////////////////////
+wire [7:0] symbiface_dout;
+symbiface_II symbiface
+(
+	.clk_sys(clk_sys),
+	.reset(reset),
+	.ena(st_symbiface),
+	.rtc(rtc),
+	.io_rd(io_rd),
+	.io_wr(io_wr),
+	.addr(cpu_addr),
+	.din(cpu_dout),
+	.dout(symbiface_dout),
+	.ide_cs(ide_cs),
+	.ide_addr(ide_addr),
+	.ide_din(ide_din),
+	.ide_dout(ide_dout)
+);
+
+//////////////////////////////////////////////////////////////////////
 
 wire mouse_rd = io_rd & st_mouse_en;
 
@@ -669,7 +759,7 @@ wire        hs, vs, hbl, vbl;
 
 wire  [9:0] audio_l, audio_r;
 
-wire  [7:0] cpu_din = ram_dout & mf2_dout & fdc_dout & kmouse_dout & smouse_dout & mmouse_dout & playcity_dout;
+wire  [7:0] cpu_din = ram_dout & mf2_dout & fdc_dout & kmouse_dout & smouse_dout & mmouse_dout & playcity_dout & symbiface_dout;
 wire        NMI = playcity_nmi | mf2_nmi;
 wire        IRQ = ~playcity_int_n;
 
