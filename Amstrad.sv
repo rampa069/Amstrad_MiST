@@ -192,10 +192,14 @@ wire [15:0] hdd_data_in;
 wire        hdd_data_rd;
 wire        hdd_data_wr;
 
+reg   [1:0] hdd0_ena;
+reg   [1:0] hdd1_ena;
+
 wire        ide_cs;
 wire  [2:0] ide_addr;
 wire [15:0] ide_din;
 wire [15:0] ide_dout;
+wire        ide_oe;
 
 user_io #(.STRLEN($size(CONF_STR)>>3), .SD_IMAGES(4), .FEATURES(32'h50) /* Primary IDE - master/slave ATA */) user_io
 (
@@ -270,7 +274,10 @@ data_io #(.ENABLE_IDE(1'b1)) data_io
 	.hdd_data_out  ( hdd_data_out ),
 	.hdd_data_in   ( hdd_data_in  ),
 	.hdd_data_rd   ( hdd_data_rd  ),
-	.hdd_data_wr   ( hdd_data_wr  )
+	.hdd_data_wr   ( hdd_data_wr  ),
+
+	.hdd0_ena      ( hdd0_ena     ),
+	.hdd1_ena      ( hdd1_ena     )
 );
 
 ide ide (
@@ -283,6 +290,7 @@ ide ide (
 	.sel_secondary(1'b0),
 	.data_in(ide_din),
 	.data_out(ide_dout),
+	.data_oe(ide_oe),
 	.rd(io_rd),
 	.hwr(io_wr),
 	.lwr(io_wr),
@@ -290,8 +298,8 @@ ide ide (
 	.intreq(),
 	.intreq_ack(),
 	.nrdy(),              // fifo is not ready for reading
-	.hdd0_ena(2'b11),     // enables Master & Slave drives on primary channel
-	.hdd1_ena(2'b00),     // enables Master & Slave drives on secondary channel
+	.hdd0_ena(hdd0_ena),  // enables Master & Slave drives on primary channel
+	.hdd1_ena(hdd1_ena),  // enables Master & Slave drives on secondary channel
 	.fifo_rd(),
 	.fifo_wr(),
 
@@ -705,7 +713,7 @@ symbiface_II symbiface
 	.ide_cs(ide_cs),
 	.ide_addr(ide_addr),
 	.ide_din(ide_din),
-	.ide_dout(ide_dout)
+	.ide_dout(ide_oe ? ide_dout : 16'hFFFF)
 );
 
 //////////////////////////////////////////////////////////////////////
