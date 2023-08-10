@@ -232,6 +232,8 @@ always @(posedge CLOCK) begin
 
 			if(HSYNC) hsc <= hsc + 1'd1;
 			else hsc <= 0;
+		end else if (nCLKEN) begin
+			if(!CRTC_TYPE && hcc_last && hcc + 1'd1 == R1_h_displayed) hde <= 0;
 		end
 	end
 end
