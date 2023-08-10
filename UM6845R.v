@@ -288,13 +288,13 @@ always @(posedge CLOCK) begin
 			vsc <= (CRTC_TYPE ? 4'd0 : R3_v_sync_width) - 1'd1;
 		end
 	end
-	if (nCLKEN & ENABLE & RS & ~nCS & ~R_nW & addr == 5'd06) begin
+	if (ENABLE & RS & ~nCS & ~R_nW & addr == 5'd06) begin
 		if (CRTC_TYPE) begin
 			if (row == DI[6:0]) vde_r <= 0;
 			if (row != DI[6:0] && DI[6:0] != 0) vde <= vde_r;
 			if (row == R6_v_displayed && DI[6:0] != row) vde <= 1;
 			if (row == DI[6:0] || DI[6:0] == 0) vde <= 0;
-		end else begin
+		end else if (nCLKEN) begin
 			if (row == DI[6:0] && !(row == 0 && line == 0)) vde_r <= 0;
 		end
 	end
