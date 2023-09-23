@@ -19,44 +19,117 @@
 //  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //============================================================================
 
-module Amstrad
-(
-	input         SPI_DI,
-	inout         SPI_DO,
-	input         SPI_SCK,
-	input         CONF_DATA0,
-	input         SPI_SS2,
-	input         SPI_SS3,
-	input         SPI_SS4,
-	input   [1:0] CLOCK_27,
-	output        AUDIO_L,
-	output        AUDIO_R,
-	output        UART_TX,
-	input         UART_RX,
-	output        SDRAM_DQMH,
-	output        SDRAM_DQML,
-	output        SDRAM_CKE,
-	output        SDRAM_nCS,
-	output        SDRAM_nWE,
-	output        SDRAM_nRAS,
-	output        SDRAM_nCAS,
-	output        SDRAM_CLK,
+module Amstrad (
+	input         CLOCK_27,
+`ifdef USE_CLOCK_50
+	input         CLOCK_50,
+`endif
+
 	output        LED,
+	output [VGA_BITS-1:0] VGA_R,
+	output [VGA_BITS-1:0] VGA_G,
+	output [VGA_BITS-1:0] VGA_B,
 	output        VGA_HS,
 	output        VGA_VS,
+
+	input         SPI_SCK,
+	inout         SPI_DO,
+	input         SPI_DI,
+	input         SPI_SS2,    // data_io
+	input         SPI_SS3,    // OSD
+	input         CONF_DATA0, // SPI_SS for user_io
+
+`ifdef USE_QSPI
+	input         QSCK,
+	input         QCSn,
+	inout   [3:0] QDAT,
+`endif
+`ifndef NO_DIRECT_UPLOAD
+	input         SPI_SS4,
+`endif
+
 	output [12:0] SDRAM_A,
-	output  [1:0] SDRAM_BA,
 	inout  [15:0] SDRAM_DQ,
-	output  [5:0] VGA_B,
-	output  [5:0] VGA_G,
-	output  [5:0] VGA_R
+	output        SDRAM_DQML,
+	output        SDRAM_DQMH,
+	output        SDRAM_nWE,
+	output        SDRAM_nCAS,
+	output        SDRAM_nRAS,
+	output        SDRAM_nCS,
+	output  [1:0] SDRAM_BA,
+	output        SDRAM_CLK,
+	output        SDRAM_CKE,
+
+`ifdef DUAL_SDRAM
+	output [12:0] SDRAM2_A,
+	inout  [15:0] SDRAM2_DQ,
+	output        SDRAM2_DQML,
+	output        SDRAM2_DQMH,
+	output        SDRAM2_nWE,
+	output        SDRAM2_nCAS,
+	output        SDRAM2_nRAS,
+	output        SDRAM2_nCS,
+	output  [1:0] SDRAM2_BA,
+	output        SDRAM2_CLK,
+	output        SDRAM2_CKE,
+`endif
+
+	output        AUDIO_L,
+	output        AUDIO_R,
+`ifdef I2S_AUDIO
+	output        I2S_BCK,
+	output        I2S_LRCK,
+	output        I2S_DATA,
+`endif
+`ifdef USE_AUDIO_IN
+	input         AUDIO_IN,
+`endif
+	input         UART_RX,
+	output        UART_TX
+
 );
+
+`ifdef NO_DIRECT_UPLOAD
+localparam bit DIRECT_UPLOAD = 0;
+wire SPI_SS4 = 1;
+`else
+localparam bit DIRECT_UPLOAD = 1;
+`endif
+
+`ifdef USE_QSPI
+localparam bit QSPI = 1;
+assign QDAT = 4'hZ;
+`else
+localparam bit QSPI = 0;
+`endif
+
+`ifdef VGA_8BIT
+localparam VGA_BITS = 8;
+`else
+localparam VGA_BITS = 6;
+`endif
+
+// remove this if the 2nd chip is actually used
+`ifdef DUAL_SDRAM
+assign SDRAM2_A = 13'hZZZZ;
+assign SDRAM2_BA = 0;
+assign SDRAM2_DQML = 0;
+assign SDRAM2_DQMH = 0;
+assign SDRAM2_CKE = 0;
+assign SDRAM2_CLK = 0;
+assign SDRAM2_nCS = 1;
+assign SDRAM2_DQ = 16'hZZZZ;
+assign SDRAM2_nCAS = 1;
+assign SDRAM2_nRAS = 1;
+assign SDRAM2_nWE = 1;
+`endif
+
+`include "build_id.v"
 
 //////////////////////////////////////////////////////////////////////////
 
 assign LED = ~mf2_en & ~ioctl_download & ~(tape_running & tape_motor_led);
 
-`include "build_id.v"
 localparam CONF_STR = {
 	"AMSTRAD;;",
 	"S2U,DSK,Mount Disk A:;",
@@ -843,7 +916,6 @@ Amstrad_motherboard motherboard
 
 wire [7:0] B, G, R;
 wire       HSync, VSync, HBlank, VBlank;
-wire       blank = HBlank | VBlank;
 
 color_mix color_mix
 (
@@ -868,7 +940,7 @@ color_mix color_mix
 	.R_out(R)
 );
 
-mist_video #(.SD_HCNT_WIDTH(10), .OSD_X_OFFSET(10'd18)) mist_video (
+mist_video #(.COLOR_DEPTH(8), .SD_HCNT_WIDTH(10), .OSD_X_OFFSET(10'd18), .USE_BLANKS(1'b1), .OUT_COLOR_DEPTH(VGA_BITS)) mist_video (
 	.clk_sys     ( clk_sys    ),
 
 	// OSD SPI interface
@@ -894,10 +966,12 @@ mist_video #(.SD_HCNT_WIDTH(10), .OSD_X_OFFSET(10'd18)) mist_video (
 	.blend       ( 1'b0       ),
 
 	// video in
-	.R           ( blank ? 6'd0 : ( R[7:2] | {6{progress_pix}}) ),
-	.G           ( blank ? 6'd0 : ( G[7:2] | {6{progress_pix}}) ),
-	.B           ( blank ? 6'd0 : ( B[7:2] | {6{progress_pix}}) ),
+	.R           ( R | {8{progress_pix}} ),
+	.G           ( G | {8{progress_pix}} ),
+	.B           ( B | {8{progress_pix}} ),
 
+	.HBlank      ( HBlank     ),
+	.VBlank      ( VBlank     ),
 	.HSync       ( ~HSync     ),
 	.VSync       ( ~VSync     ),
 
