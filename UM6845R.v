@@ -202,6 +202,13 @@ always @(posedge CLOCK) begin
 		if(CRTC1_reload) begin
 			row_addr_r <= {R12_start_addr_h, R13_start_addr_l};
 		end
+		// "Sick mode(?)" on CRTC1
+		if (CRTC_TYPE & ENABLE & RS & ~nCS & ~R_nW & hde) begin
+			case (addr)
+				5'd12: row_addr[13:8] <= DI[5:0];
+				5'd13: row_addr[ 7:0] <= DI[7:0];
+			endcase
+		end
 	end
 end
 
