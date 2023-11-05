@@ -188,8 +188,12 @@ wire row_addr_save = hcc == R1_h_displayed && (CRTC_TYPE ? line_last : line_last
 // address
 reg  [13:0] row_addr;   // saved pointer
 reg  [13:0] row_addr_r; // current pointer
+reg         rfd;        // "Rupture for Dummies" on CRTC1
 always @(posedge CLOCK) begin
-	if(CLKEN) begin
+
+	if (!nRESET) begin
+		rfd <= 0;
+	end else if(CLKEN) begin
 		if(row_addr_save) row_addr <= row_addr_r; // save current pointer
 
 		if(hcc_last & !row_addr_save) row_addr_r <= row_addr; // restore the pointer, take care of simultaneous saving and restoring
@@ -203,13 +207,17 @@ always @(posedge CLOCK) begin
 			row_addr_r <= {R12_start_addr_h, R13_start_addr_l};
 		end
 		// "Sick mode(?)" on CRTC1
-		if (CRTC_TYPE & ENABLE & RS & ~nCS & ~R_nW & hde) begin
-			case (addr)
-				5'd12: row_addr[13:8] <= DI[5:0];
-				5'd13: row_addr[ 7:0] <= DI[7:0];
-			endcase
-		end
+		if (hcc == 0 & R5_v_total_adj != 0) rfd <= 1;
+		if (hcc == R1_h_displayed | frame_new) rfd <= 0;
 	end
+
+	if (CRTC_TYPE & ENABLE & RS & ~nCS & ~R_nW & rfd) begin
+		case (addr)
+			5'd12: row_addr[13:8] <= DI[5:0];
+			5'd13: row_addr[ 7:0] <= DI[7:0];
+		endcase
+	end
+
 end
 
 // horizontal output
