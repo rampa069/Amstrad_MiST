@@ -48,8 +48,7 @@ set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
 set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR 1
 
 set_location_assignment PIN_7 -to LED
-set_location_assignment PIN_54 -to CLOCK_27[0]
-set_location_assignment PIN_55 -to CLOCK_27[1]
+set_location_assignment PIN_54 -to CLOCK_27
 set_location_assignment PIN_144 -to VGA_R[5]
 set_location_assignment PIN_143 -to VGA_R[4]
 set_location_assignment PIN_142 -to VGA_R[3]
@@ -250,6 +249,13 @@ set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to VGA_B[3]
 set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to VGA_B[2]
 set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to VGA_B[1]
 set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to VGA_B[0]
+set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to VGA_HS
+set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to VGA_VS
+set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to UART_TX
+set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to AUDIO_L
+set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to AUDIO_R
+set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to LED
+set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to SPI_DO
 
 set_location_assignment PLL_1 -to "pll:pll|altpll:altpll_component"
 
@@ -288,13 +294,6 @@ set_global_assignment -name ENABLE_SIGNALTAP OFF
 set_global_assignment -name USE_SIGNALTAP_FILE output_files/z80cpu.stp
 set_global_assignment -name TIMEQUEST_MULTICORNER_ANALYSIS ON
 set_global_assignment -name SMART_RECOMPILE ON
-set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to VGA_HS
-set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to VGA_VS
-set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to UART_TX
-set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to AUDIO_L
-set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to AUDIO_R
-set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to LED
-set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to SPI_DO
 set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_RETIMING ON
 set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION ON
 set_global_assignment -name QIP_FILE pll.qip

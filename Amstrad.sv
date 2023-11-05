@@ -109,6 +109,14 @@ localparam VGA_BITS = 8;
 localparam VGA_BITS = 6;
 `endif
 
+`ifdef BIG_OSD
+localparam bit BIG_OSD = 1;
+`define SEP "-;",
+`else
+localparam bit BIG_OSD = 0;
+`define SEP
+`endif
+
 // remove this if the 2nd chip is actually used
 `ifdef DUAL_SDRAM
 assign SDRAM2_A = 13'hZZZZ;
@@ -136,9 +144,11 @@ localparam CONF_STR = {
 	"S3U,DSK,Mount Disk B:;",
 	"F,E??,Load expansion;",
 	"F,CDT,Load;",
+	`SEP
 	"P1,Video & Audio;",
 	"P2,Controls;",
 	"P3,System;",
+	`SEP
 	"T0,Reset & apply model;",
 	"P1O9A,Scandoubler Fx,None,CRT 25%,CRT 50%,CRT 75%;",
 	"P1OBD,Display,Color(GA),Color(ASIC),Green,Amber,Cyan,White;",
@@ -274,7 +284,7 @@ wire [15:0] ide_din;
 wire [15:0] ide_dout;
 wire        ide_oe;
 
-user_io #(.STRLEN($size(CONF_STR)>>3), .SD_IMAGES(4), .FEATURES(32'h50) /* Primary IDE - master/slave ATA */) user_io
+user_io #(.STRLEN($size(CONF_STR)>>3), .SD_IMAGES(4), .FEATURES(32'h50 | (BIG_OSD << 13)) /* Primary IDE - master/slave ATA */) user_io
 (
 	.clk_sys(clk_sys),
 	.clk_sd(clk_sys),
@@ -940,7 +950,7 @@ color_mix color_mix
 	.R_out(R)
 );
 
-mist_video #(.COLOR_DEPTH(8), .SD_HCNT_WIDTH(10), .OSD_X_OFFSET(10'd18), .USE_BLANKS(1'b1), .OUT_COLOR_DEPTH(VGA_BITS)) mist_video (
+mist_video #(.COLOR_DEPTH(8), .SD_HCNT_WIDTH(10), .OSD_X_OFFSET(10'd18), .USE_BLANKS(1'b1), .OUT_COLOR_DEPTH(VGA_BITS), .BIG_OSD(BIG_OSD)) mist_video (
 	.clk_sys     ( clk_sys    ),
 
 	// OSD SPI interface
