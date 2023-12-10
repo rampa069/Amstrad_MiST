@@ -296,7 +296,7 @@ set_global_assignment -name TIMEQUEST_MULTICORNER_ANALYSIS ON
 set_global_assignment -name SMART_RECOMPILE ON
 set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_RETIMING ON
 set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION ON
-set_global_assignment -name QIP_FILE pll.qip
+set_global_assignment -name QIP_FILE cyc3/pll.qip
 set_global_assignment -name QIP_FILE "mist-modules/mist.qip"
 set_global_assignment -name VERILOG_FILE sigma_delta_dac.v
 set_global_assignment -name QIP_FILE T80/T80.qip

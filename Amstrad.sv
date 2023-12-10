@@ -32,6 +32,20 @@ module Amstrad (
 	output        VGA_HS,
 	output        VGA_VS,
 
+`ifdef USE_HDMI
+	output        HDMI_RST,
+	output  [7:0] HDMI_R,
+	output  [7:0] HDMI_G,
+	output  [7:0] HDMI_B,
+	output        HDMI_HS,
+	output        HDMI_VS,
+	output        HDMI_PCLK,
+	output        HDMI_DE,
+	inout         HDMI_SDA,
+	inout         HDMI_SCL,
+	input         HDMI_INT,
+`endif
+
 	input         SPI_SCK,
 	inout         SPI_DO,
 	input         SPI_DI,
@@ -81,6 +95,9 @@ module Amstrad (
 	output        I2S_LRCK,
 	output        I2S_DATA,
 `endif
+`ifdef SPDIF_AUDIO
+	output        SPDIF,
+`endif
 `ifdef USE_AUDIO_IN
 	input         AUDIO_IN,
 `endif
@@ -107,6 +124,13 @@ localparam bit QSPI = 0;
 localparam VGA_BITS = 8;
 `else
 localparam VGA_BITS = 6;
+`endif
+
+`ifdef USE_HDMI
+localparam bit HDMI = 1;
+assign HDMI_RST = 1'b1;
+`else
+localparam bit HDMI = 0;
 `endif
 
 `ifdef BIG_OSD
@@ -194,11 +218,17 @@ wire       st_symbiface = status[26];
 
 wire clk_sys;
 wire locked;
+`ifdef USE_HDMI
+wire clk_hdmi;
+`endif
 
 pll pll
 (
 	.inclk0(CLOCK_27),
 	.c0(clk_sys),
+`ifdef USE_HDMI
+	.c1(clk_hdmi),
+`endif
 	.locked(locked)
 );
 
@@ -284,29 +314,26 @@ wire [15:0] ide_din;
 wire [15:0] ide_dout;
 wire        ide_oe;
 
-user_io #(.STRLEN($size(CONF_STR)>>3), .SD_IMAGES(4), .FEATURES(32'h50 | (BIG_OSD << 13)) /* Primary IDE - master/slave ATA */) user_io
+`ifdef USE_HDMI
+wire        i2c_start;
+wire        i2c_read;
+wire  [6:0] i2c_addr;
+wire  [7:0] i2c_subaddr;
+wire  [7:0] i2c_dout;
+wire  [7:0] i2c_din;
+wire        i2c_ack;
+wire        i2c_end;
+`endif
+
+user_io #(.STRLEN($size(CONF_STR)>>3), .SD_IMAGES(4), .FEATURES(32'h50 /* Primary IDE - master/slave ATA */ | (BIG_OSD << 13) | (HDMI << 14))) user_io
 (
 	.clk_sys(clk_sys),
-	.clk_sd(clk_sys),
 	.conf_str(CONF_STR),
 
 	.SPI_CLK(SPI_SCK),
 	.SPI_SS_IO(CONF_DATA0),
 	.SPI_MOSI(SPI_DI),
 	.SPI_MISO(SPI_DO),
-
-	.img_mounted({img_mounted, 2'b00}), // 0-1 is reserved for IDE
-	.img_size(img_size),
-	.sd_conf(0),
-	.sd_sdhc(1),
-	.sd_lba(sd_lba),
-	.sd_rd({sd_rd, 2'b00}),
-	.sd_wr({sd_wr, 2'b00}),
-	.sd_ack(sd_ack),
-	.sd_buff_addr(sd_buff_addr),
-	.sd_din(sd_buff_din),
-	.sd_dout(sd_buff_dout),
-	.sd_dout_strobe(sd_buff_wr),
 
 	.key_strobe(key_strobe),
 	.key_code(key_code),
@@ -327,7 +354,31 @@ user_io #(.STRLEN($size(CONF_STR)>>3), .SD_IMAGES(4), .FEATURES(32'h50 | (BIG_OS
 	.ypbpr(ypbpr),
 	.no_csync(no_csync),
 
-	.rtc(rtc)
+	.rtc(rtc),
+`ifdef USE_HDMI
+	.i2c_start      (i2c_start      ),
+	.i2c_read       (i2c_read       ),
+	.i2c_addr       (i2c_addr       ),
+	.i2c_subaddr    (i2c_subaddr    ),
+	.i2c_dout       (i2c_dout       ),
+	.i2c_din        (i2c_din        ),
+	.i2c_ack        (i2c_ack        ),
+	.i2c_end        (i2c_end        ),
+`endif
+
+	.clk_sd(clk_sys),
+	.img_mounted({img_mounted, 2'b00}), // 0-1 is reserved for IDE
+	.img_size(img_size),
+	.sd_conf(0),
+	.sd_sdhc(1),
+	.sd_lba(sd_lba),
+	.sd_rd({sd_rd, 2'b00}),
+	.sd_wr({sd_wr, 2'b00}),
+	.sd_ack(sd_ack),
+	.sd_buff_addr(sd_buff_addr),
+	.sd_din(sd_buff_din),
+	.sd_dout(sd_buff_dout),
+	.sd_dout_strobe(sd_buff_wr)
 );
 
 data_io #(.ENABLE_IDE(1'b1)) data_io
@@ -950,7 +1001,7 @@ color_mix color_mix
 	.R_out(R)
 );
 
-mist_video #(.COLOR_DEPTH(8), .SD_HCNT_WIDTH(10), .OSD_X_OFFSET(10'd18), .USE_BLANKS(1'b1), .OUT_COLOR_DEPTH(VGA_BITS), .BIG_OSD(BIG_OSD)) mist_video (
+mist_video #(.COLOR_DEPTH(8), .SD_HCNT_WIDTH(10), .USE_BLANKS(1'b1), .OUT_COLOR_DEPTH(VGA_BITS), .BIG_OSD(BIG_OSD)) mist_video (
 	.clk_sys     ( clk_sys    ),
 
 	// OSD SPI interface
@@ -993,13 +1044,79 @@ mist_video #(.COLOR_DEPTH(8), .SD_HCNT_WIDTH(10), .OSD_X_OFFSET(10'd18), .USE_BL
 	.VGA_HS      ( VGA_HS     )
 );
 
+`ifdef USE_HDMI
+i2c_master #(64_000_000) i2c_master (
+	.CLK         (clk_sys),
+	.I2C_START   (i2c_start),
+	.I2C_READ    (i2c_read),
+	.I2C_ADDR    (i2c_addr),
+	.I2C_SUBADDR (i2c_subaddr),
+	.I2C_WDATA   (i2c_dout),
+	.I2C_RDATA   (i2c_din),
+	.I2C_END     (i2c_end),
+	.I2C_ACK     (i2c_ack),
+
+	//I2C bus
+	.I2C_SCL     (HDMI_SCL),
+	.I2C_SDA     (HDMI_SDA)
+);
+
+mist_video #(.COLOR_DEPTH(8), .SD_HCNT_WIDTH(10), .USE_BLANKS(1'b1), .OUT_COLOR_DEPTH(8), .BIG_OSD(BIG_OSD), VIDEO_CLEANER(1'b1)) hdmi_video (
+	.clk_sys     ( clk_hdmi   ),
+
+	// OSD SPI interface
+	.SPI_SCK     ( SPI_SCK    ),
+	.SPI_SS3     ( SPI_SS3    ),
+	.SPI_DI      ( SPI_DI     ),
+
+	// scanlines (00-none 01-25% 10-50% 11-75%)
+	.scanlines   ( st_scanlines  ),
+
+	// non-scandoubled pixel clock divider 0 - clk_sys/4, 1 - clk_sys/2
+	.ce_divider  ( 3'd1       ),
+
+	// 0 = HVSync 31KHz, 1 = CSync 15KHz
+	.scandoubler_disable ( 1'b0 ),
+	// disable csync without scandoubler
+	.no_csync    ( 1'b0       ),
+	// YPbPr always uses composite sync
+	.ypbpr       ( 1'b0       ),
+	// Rotate OSD [0] - rotate [1] - left or right
+	.rotate      ( 2'b00      ),
+	// composite-like blending
+	.blend       ( 1'b0       ),
+
+	// video in
+	.R           ( R | {8{progress_pix}} ),
+	.G           ( G | {8{progress_pix}} ),
+	.B           ( B | {8{progress_pix}} ),
+
+	.HBlank      ( HBlank     ),
+	.VBlank      ( VBlank     ),
+	.HSync       ( ~HSync     ),
+	.VSync       ( ~VSync     ),
+
+	// MiST video output signals
+	.VGA_R       ( HDMI_R     ),
+	.VGA_G       ( HDMI_G     ),
+	.VGA_B       ( HDMI_B     ),
+	.VGA_VS      ( HDMI_VS    ),
+	.VGA_HS      ( HDMI_HS    ),
+	.VGA_DE      ( HDMI_DE    )
+);
+
+assign HDMI_PCLK = clk_hdmi;
+
+`endif
 //////////////////////////////////////////////////////////////////////
+wire[10:0] soundl = {1'b0, audio_l} + {1'b0, playcity_audio_l} + (st_tape_sound ? {tape_rec, tape_play, 6'd0} : 11'd0);
+wire[10:0] soundr = {1'b0, audio_r} + {1'b0, playcity_audio_r} + (st_tape_sound ? {tape_rec, tape_play, 6'd0} : 11'd0);
 
 sigma_delta_dac #(10) dac_l
 (
 	.CLK(clk_sys),
 	.RESET(reset),
-	.DACin({1'b0, audio_l} + {1'b0, playcity_audio_l} + (st_tape_sound ? {tape_rec, tape_play, 6'd0} : 0)),
+	.DACin(soundl),
 	.DACout(AUDIO_L)
 );
 
@@ -1007,9 +1124,34 @@ sigma_delta_dac #(10) dac_r
 (
 	.CLK(clk_sys),
 	.RESET(reset),
-	.DACin({1'b0, audio_r} + {1'b0, playcity_audio_r} + (st_tape_sound ? {tape_rec, tape_play, 6'd0} : 0)),
+	.DACin(soundr),
 	.DACout(AUDIO_R)
 );
+
+`ifdef I2S_AUDIO
+i2s i2s (
+	.reset(reset),
+	.clk(clk_sys),
+	.clk_rate(32'd64_000_000),
+
+	.sclk(I2S_BCK),
+	.lrclk(I2S_LRCK),
+	.sdata(I2S_DATA),
+
+	.left_chan({{2{~soundl[10]}}, soundl[9:0], 4'd0}),
+	.right_chan({{2{~soundr[10]}}, soundr[9:0], 4'd0})
+);
+`endif
+
+`ifdef SPDIF_AUDIO
+spdif spdif (
+	.clk_i(clk_sys),
+	.rst_i(reset),
+	.clk_rate_i(32'd64_000_000),
+	.spdif_o(SPDIF),
+	.sample_i({ {2{~soundl[10]}}, soundl[9:0], 4'd0, {2{~soundr[10]}}, soundr[9:0], 4'd0})
+);
+`endif
 
 //////////////////////////////////////////////////////////////////////
 
