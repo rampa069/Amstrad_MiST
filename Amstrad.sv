@@ -19,7 +19,7 @@
 //  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //============================================================================
 
-module Amstrad (
+module guest_top (
 	input         CLOCK_27,
 `ifdef USE_CLOCK_50
 	input         CLOCK_50,
@@ -546,7 +546,7 @@ wire  [7:0] ram_dout;
 wire [15:0] vram_dout;
 wire [14:0] vram_addr;
 
-assign SDRAM_CLK = clk_sys;
+assign SDRAM_CLK = ~clk_sys;
 
 sdram sdram
 (
@@ -1129,18 +1129,30 @@ sigma_delta_dac #(10) dac_r
 );
 
 `ifdef I2S_AUDIO
-i2s i2s (
-	.reset(reset),
-	.clk(clk_sys),
-	.clk_rate(32'd64_000_000),
+//i2s i2s (
+//	.reset(reset),
+//	.clk(clk_sys),
+//	.clk_rate(32'd64_000_000),
+//
+//	.sclk(I2S_BCK),
+//	.lrclk(I2S_LRCK),
+//	.sdata(I2S_DATA),
+//
+//	.left_chan({~soundl[10], soundl[9:0], 5'd0}),
+//	.right_chan({~soundr[10],soundr[9:0], 5'd0})
+//);
 
-	.sclk(I2S_BCK),
-	.lrclk(I2S_LRCK),
-	.sdata(I2S_DATA),
-
-	.left_chan({{2{~soundl[10]}}, soundl[9:0], 4'd0}),
-	.right_chan({{2{~soundr[10]}}, soundr[9:0], 4'd0})
+audio_top audio_top
+(
+  .clk_50MHz  (CLOCK_27),
+  .dac_MCLK   (),
+  .dac_LRCK   (I2S_LRCK),
+  .dac_SCLK   (I2S_BCK),
+  .dac_SDIN   (I2S_DATA),
+  .L_data     ({{2{~soundl[10]}}, soundl[9:0], 4'd0}),
+  .R_data     ({{2{~soundr[10]}}, soundr[9:0], 4'd0})
 );
+
 `endif
 
 `ifdef SPDIF_AUDIO
