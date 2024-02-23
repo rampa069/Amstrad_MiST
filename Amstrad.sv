@@ -95,6 +95,12 @@ module guest_top (
 	output        I2S_LRCK,
 	output        I2S_DATA,
 `endif
+`ifdef I2S_AUDIO_HDMI
+	output        HDMI_MCLK,
+	output        HDMI_BCK,
+	output        HDMI_LRCK,
+	output        HDMI_SDATA,
+`endif
 `ifdef SPDIF_AUDIO
 	output        SPDIF,
 `endif
@@ -179,6 +185,7 @@ localparam CONF_STR = {
 	"P1O2,CRTC,Type 1,Type 0;",
 	"P1O3,Sync signals,Original,Filtered;",
 	"P1OK,Tape sound,Disabled,Enabled;",
+	"P1OR,Invert tape in,Off,On;",
 	"P1OL,Sound output,Stereo,Mono;",
 	"P1OO,Playcity,Disabled,Enabled;",
 	"P2OI,Joysticks swap,No,Yes;",
@@ -213,6 +220,7 @@ wire       st_keypad_mod = status[23];
 wire       st_playcity_ena = status[24];
 wire       st_progressbar = status[25];
 wire       st_symbiface = status[26];
+wire       st_invert_tape = status[27];
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -224,10 +232,17 @@ wire clk_hdmi;
 
 pll pll
 (
+`ifdef USE_CLOCK_50
+	.inclk0(CLOCK_50),
+`else
 	.inclk0(CLOCK_27),
+`endif
 	.c0(clk_sys),
 `ifdef USE_HDMI
 	.c1(clk_hdmi),
+`endif
+`ifdef SDRAM_SHIFTED_CLOCK
+	.c2(SDRAM_CLK),
 `endif
 	.locked(locked)
 );
@@ -546,7 +561,9 @@ wire  [7:0] ram_dout;
 wire [15:0] vram_dout;
 wire [14:0] vram_addr;
 
-assign SDRAM_CLK = ~clk_sys;
+`ifndef SDRAM_SHIFTED_CLOCK
+assign SDRAM_CLK = clk_sys;
+`endif
 
 sdram sdram
 (
@@ -1061,7 +1078,7 @@ i2c_master #(64_000_000) i2c_master (
 	.I2C_SDA     (HDMI_SDA)
 );
 
-mist_video #(.COLOR_DEPTH(8), .SD_HCNT_WIDTH(10), .USE_BLANKS(1'b1), .OUT_COLOR_DEPTH(8), .BIG_OSD(BIG_OSD), VIDEO_CLEANER(1'b1)) hdmi_video (
+mist_video #(.COLOR_DEPTH(8), .SD_HCNT_WIDTH(10), .USE_BLANKS(1'b1), .OUT_COLOR_DEPTH(8), .BIG_OSD(BIG_OSD), .VIDEO_CLEANER(1'b1)) hdmi_video (
 	.clk_sys     ( clk_hdmi   ),
 
 	// OSD SPI interface
@@ -1129,30 +1146,27 @@ sigma_delta_dac #(10) dac_r
 );
 
 `ifdef I2S_AUDIO
-//i2s i2s (
-//	.reset(reset),
-//	.clk(clk_sys),
-//	.clk_rate(32'd64_000_000),
-//
-//	.sclk(I2S_BCK),
-//	.lrclk(I2S_LRCK),
-//	.sdata(I2S_DATA),
-//
-//	.left_chan({~soundl[10], soundl[9:0], 5'd0}),
-//	.right_chan({~soundr[10],soundr[9:0], 5'd0})
-//);
+i2s i2s (
+	.reset(reset),
+	.clk(clk_sys),
+	.clk_rate(32'd64_000_000),
 
-audio_top audio_top
-(
-  .clk_50MHz  (CLOCK_27),
-  .dac_MCLK   (),
-  .dac_LRCK   (I2S_LRCK),
-  .dac_SCLK   (I2S_BCK),
-  .dac_SDIN   (I2S_DATA),
-  .L_data     ({{2{~soundl[10]}}, soundl[9:0], 4'd0}),
-  .R_data     ({{2{~soundr[10]}}, soundr[9:0], 4'd0})
+	.sclk(I2S_BCK),
+	.lrclk(I2S_LRCK),
+	.sdata(I2S_DATA),
+
+	.left_chan({{2{~soundl[10]}}, soundl[9:0], 4'd0}),
+	.right_chan({{2{~soundr[10]}}, soundr[9:0], 4'd0})
 );
+`endif
 
+`ifdef I2S_AUDIO_HDMI
+assign HDMI_MCLK = 0;
+always @(posedge clk_sys) begin
+	HDMI_BCK <= I2S_BCK;
+	HDMI_LRCK <= I2S_LRCK;
+	HDMI_SDATA <= I2S_DATA;
+end
 `endif
 
 `ifdef SPDIF_AUDIO
@@ -1167,15 +1181,22 @@ spdif spdif (
 
 //////////////////////////////////////////////////////////////////////
 
-reg        UART_RXd, UART_RXd2, tape_in;
+wire tape_pin;
+`ifdef USE_AUDIO_IN
+assign tape_pin = AUDIO_IN;
+`else
+assign tape_pin = UART_RX;
+`endif
+
+reg        tape_inD, tape_inD2, tape_in;
 assign     UART_TX = tape_motor;
 
 // detect tape input from UART, switch to external tape input for 5 secs
 // if signal transition detected
 always @(posedge clk_sys) begin
-	UART_RXd <= UART_RX;
-	UART_RXd2 <= UART_RXd;
-	tape_in <= UART_RXd2;
+	tape_inD <= st_invert_tape ^ tape_pin;
+	tape_inD2 <= tape_inD;
+	tape_in <= tape_inD2;
 
 	tape_play <= tape_running ? tape_read : tape_in;
 end
